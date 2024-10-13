@@ -1,0 +1,7 @@
+defaults:
+  - _self_
+  - mode: train  # 기본적으로 train 모드를 사용
+
+mode:
+  train: train.yaml
+  inference: inference.yaml
