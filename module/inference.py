@@ -31,9 +31,8 @@ from transformers import (
     EvalPrediction,
     HfArgumentParser,
     TrainingArguments,
-    set_seed,
 )
-from .utils_qa import check_no_error, postprocess_qa_predictions
+from .utils_qa import set_seed,check_no_error, postprocess_qa_predictions
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
@@ -48,12 +47,15 @@ def inference(cfg: DictConfig):
 
     model_args = ModelArguments(**cfg.get("model"))
     data_args = DataTrainingArguments(**cfg.get("data"))
-    training_args = TrainingArguments(**cfg.get("trainer"))
+    training_args = TrainingArguments(**cfg.get("train"))
     
     result_path = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
     training_args.output_dir = os.path.join(training_args.output_dir, result_path)
+    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
+    model_path = os.path.join(model_args.saved_model_path,project_name)
     #training_args.do_train = True
 
+    print(f"model file from {model_path}")
     print(f"model is from {model_args.model_name_or_path}")
     print(f"data is from {data_args.dataset_name}")
 
@@ -65,13 +67,13 @@ def inference(cfg: DictConfig):
     )
 
     # verbosity 설정 : Transformers logger의 정보로 사용합니다 (on main process only)
-    logger.info("Training/evaluation parameters %s", training_args)
+    #logger.info("Training/evaluation parameters %s", training_args)
 
     # 모델을 초기화하기 전에 난수를 고정합니다.
     set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
-    print(datasets)
+    #print(datasets)
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
     # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
@@ -87,7 +89,7 @@ def inference(cfg: DictConfig):
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
-        model_args.model_name_or_path,
+        model_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
     )

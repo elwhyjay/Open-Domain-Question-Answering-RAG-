@@ -185,7 +185,7 @@ def run_mrc(
             ]
         return tokenized_examples
 
-    if training_args.do_eval:
+    if training_args.do_eval or training_args.do_predict:
         eval_dataset = datasets["validation"]
 
         # Validation Feature 생성
@@ -240,8 +240,8 @@ def run_mrc(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
-        eval_dataset=eval_dataset if training_args.do_eval else None,
-        eval_examples=datasets["validation"] if training_args.do_eval else None,
+        eval_dataset=eval_dataset if training_args.do_eval or training_args.do_predict else None,
+        eval_examples=datasets["validation"] if training_args.do_eval or training_args.do_predict else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
         post_process_function=post_processing_function,
