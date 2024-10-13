@@ -6,7 +6,7 @@
 
 ### MRC
 ```bash
-python main.py --mode train
+python main.py mode=train
 ```
 
 ### DPR (Dense Passage Retrievel)
@@ -14,5 +14,5 @@ python main.py --mode train
 
 ## inference
 ```bash
-python main.py --mode infernce
+python main.py mode=infernce
 ```
