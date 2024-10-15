@@ -5,12 +5,13 @@ import random
 import numpy as np
 import torch
 from typing import NoReturn
-from omegaconf import DictConfig, OmegaConf
-import hydra
+from datetime import datetime, timedelta, timezone
 
-from .arguments import DataTrainingArguments, ModelArguments
+from omegaconf import DictConfig
+
+from module.arguments import DataTrainingArguments, ModelArguments
 from datasets import DatasetDict, load_from_disk, load_metric
-from .trainer_qa import QuestionAnsweringTrainer
+from module.trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -21,11 +22,10 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from .utils_qa import set_seed, check_no_error, postprocess_qa_predictions
+from module.utils_qa import  check_no_error, postprocess_qa_predictions
 import wandb
 
-from .mrc import run_mrc
-wandb.login()
+from module.mrc import run_mrc
 
 seed = 2024
 set_seed(seed)
@@ -46,7 +46,6 @@ def train(cfg: DictConfig):
     # training_args.per_device_train_batch_size = 4
     # print(training_args.per_device_train_batch_size)
     project_name = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
-
     training_args.output_dir = os.path.join(training_args.output_dir, project_name)
     wandb.init(project="mrc", name=project_name)
     wandb.config.update(
@@ -96,14 +95,6 @@ def train(cfg: DictConfig):
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
-    )
-
-    print(
-        type(training_args),
-        type(model_args),
-        type(datasets),
-        type(tokenizer),
-        type(model),
     )
 
     # do_train mrc model 혹은 do_eval mrc model

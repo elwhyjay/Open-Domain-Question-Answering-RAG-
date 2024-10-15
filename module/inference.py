@@ -9,9 +9,10 @@ import logging
 import os
 import sys
 from typing import Callable, Dict, List, NoReturn, Tuple
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
-from .arguments import DataTrainingArguments, ModelArguments
+from module.arguments import DataTrainingArguments, ModelArguments
 from datasets import (
     Dataset,
     DatasetDict,
@@ -21,8 +22,8 @@ from datasets import (
     load_from_disk,
     load_metric,
 )
-from .sparse_retrieval import SparseRetrieval
-from .trainer_qa import QuestionAnsweringTrainer
+from module.sparse_retrieval import SparseRetrieval
+from module.trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -31,12 +32,14 @@ from transformers import (
     EvalPrediction,
     HfArgumentParser,
     TrainingArguments,
+    set_seed,
 )
-from .utils_qa import set_seed,check_no_error, postprocess_qa_predictions
-import hydra
+from module.utils_qa import check_no_error, postprocess_qa_predictions
 from omegaconf import DictConfig, OmegaConf
 
-from .mrc import run_mrc
+from module.mrc import run_mrc
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +47,15 @@ logger = logging.getLogger(__name__)
 def inference(cfg: DictConfig):
     # 가능한 arguments 들은 ./arguments.py 나 transformer package 안의 src/transformers/training_args.py 에서 확인 가능합니다.
     # --help flag 를 실행시켜서 확인할 수 도 있습니다.
-
+       
     model_args = ModelArguments(**cfg.get("model"))
     data_args = DataTrainingArguments(**cfg.get("data"))
     training_args = TrainingArguments(**cfg.get("train"))
     
     result_path = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
     training_args.output_dir = os.path.join(training_args.output_dir, result_path)
-    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
+    project_name = f"{model_args.model_name_or_path.split('/')[-1]}"
+    
     model_path = os.path.join(model_args.saved_model_path,project_name)
     #training_args.do_train = True
 

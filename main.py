@@ -9,11 +9,8 @@ from module.train import train
 from module.inference import inference
 
 
-
 @hydra.main(version_base="1.3",config_path="configs", config_name="config")
 def main(cfg: DictConfig):
-    print(sys.path)
-    
     if cfg.mode == "train":
         print("train")
        

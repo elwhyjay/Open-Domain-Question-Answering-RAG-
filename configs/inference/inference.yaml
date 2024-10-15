@@ -1,9 +1,8 @@
 model:
-  saved_model_path: ./models/train_dataset/
-  model_name_or_path: klue/bert-base
+  saved_model_path: ./models/train_dataset
+  model_name_or_path: klue/roberta-large
   config_name: null
   tokenizer_name: null
-
 
 data:
   dataset_name: ../data/test_dataset/

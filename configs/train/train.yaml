@@ -1,11 +1,11 @@
 model:
-  model_name_or_path: klue/bert-base
+  model_name_or_path: klue/roberta-large
   config_name: null
   tokenizer_name: null
 
 
 data:
-  dataset_name: ../data/train_dataset/
+  dataset_name: ../data/train_dataset
   overwrite_cache: false
   preprocessing_num_workers: null
   max_seq_length: 384
@@ -30,6 +30,7 @@ train:
   evaluation_strategy: 'epoch'
   save_strategy: 'epoch'
   save_total_limit: 2
+  learning_rate: 3e-5
   num_train_epochs: 5
   warmup_steps: 300
   seed: 42

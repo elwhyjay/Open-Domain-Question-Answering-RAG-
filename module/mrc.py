@@ -8,9 +8,9 @@ from typing import NoReturn
 from omegaconf import DictConfig
 import hydra
 
-from .arguments import DataTrainingArguments, ModelArguments
+from module.arguments import DataTrainingArguments, ModelArguments
 from datasets import DatasetDict, load_from_disk, load_metric
-from .trainer_qa import QuestionAnsweringTrainer
+from module.trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -21,7 +21,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from .utils_qa import set_seed, check_no_error, postprocess_qa_predictions
+from module.utils_qa import set_seed, check_no_error, postprocess_qa_predictions
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +66,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False if "roberta" in model.config.model_type else True,
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -158,7 +158,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False if "roberta" in model.config.model_type else True, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
