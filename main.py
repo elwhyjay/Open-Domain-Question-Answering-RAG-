@@ -13,11 +13,9 @@ from module.inference import inference
 def main(cfg: DictConfig):
     if cfg.mode == "train":
         print("train")
-       
         train(cfg.train)
     elif cfg.mode == "inference":
         print("inference")
-        
         inference(cfg.inference)
 
 if __name__ == "__main__":

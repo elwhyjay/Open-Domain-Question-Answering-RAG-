@@ -1,10 +1,3 @@
-"""
-Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
-
-대부분의 로직은 train.py 와 비슷하나 retrieval, predict 부분이 추가되어 있습니다.
-"""
-
-
 import logging
 import os
 import sys
@@ -22,7 +15,7 @@ from datasets import (
     load_from_disk,
     load_metric,
 )
-from module.sparse_retrieval import SparseRetrieval
+from module.sparse_retrieval import SparseRetrieval,BM25Retrieval
 from module.trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
@@ -52,9 +45,9 @@ def inference(cfg: DictConfig):
     data_args = DataTrainingArguments(**cfg.get("data"))
     training_args = TrainingArguments(**cfg.get("train"))
     
-    result_path = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
+    result_path = f"{model_args.model_name_or_path.split('/')[-1]}_train_dataset"
     training_args.output_dir = os.path.join(training_args.output_dir, result_path)
-    project_name = f"{model_args.model_name_or_path.split('/')[-1]}"
+    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_train_dataset"
     
     model_path = os.path.join(model_args.saved_model_path,project_name)
     #training_args.do_train = True
@@ -119,7 +112,10 @@ def run_sparse_retrieval(
 ) -> DatasetDict:
 
     # Query에 맞는 Passage들을 Retrieval 합니다.
-    retriever = SparseRetrieval(
+    # retriever = SparseRetrieval(
+    #     tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
+    # )
+    retriever = BM25Retrieval(
         tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
     )
     retriever.get_sparse_embedding()

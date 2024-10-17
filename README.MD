@@ -10,7 +10,9 @@ python main.py mode=train
 ```
 
 ### DPR (Dense Passage Retrievel)
-
+```bash
+python module/dense_ret.py 
+```
 
 ## inference
 ```bash
