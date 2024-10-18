@@ -1,0 +1,10 @@
+*.json
+*bin
+
+
+__pycache__
+
+
+wandb
+outputs
+models
