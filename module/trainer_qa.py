@@ -60,11 +60,15 @@ class QuestionAnsweringTrainer(Trainer):
             )
 
         if self.post_process_function is not None and self.compute_metrics is not None:
-            eval_preds = self.post_process_function(
+            eval_preds, label_pos = self.post_process_function(
                 eval_examples, eval_dataset, output.predictions, self.args
             )
             metrics = self.compute_metrics(eval_preds)
-
+            from torch.nn import CrossEntropyLoss
+            import torch
+            loss_f  = CrossEntropyLoss()
+            start_l = loss_f(torch.tensor(output.predictions[0]), torch.tensor(label_pos[0]))
+            metrics["eval_loss"] = start_l.item()
             self.log(metrics)
         else:
             metrics = {}

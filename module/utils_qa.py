@@ -63,6 +63,7 @@ def postprocess_qa_predictions(
     output_dir: Optional[str] = None,
     prefix: Optional[str] = None,
     is_world_process_zero: bool = True,
+    is_eval: bool = False
 ):
     """
     Post-processes : qa model의 prediction 값을 후처리하는 함수
@@ -307,8 +308,10 @@ def postprocess_qa_predictions(
                 writer.write(
                     json.dumps(scores_diff_json, indent=4, ensure_ascii=False) + "\n"
                 )
-
-    return all_predictions
+    if is_eval:
+        return all_predictions, (features["start_positions"], features["end_positions"])
+    else :
+        return all_predictions
 
 
 def check_no_error(
