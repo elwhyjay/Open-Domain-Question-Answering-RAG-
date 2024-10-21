@@ -16,7 +16,7 @@
 Question-Answering task와 관련된 'Trainer'의 subclass 코드 입니다.
 """
 
-from transformers import Trainer, is_datasets_available, is_torch_tpu_available
+from transformers import Trainer, is_datasets_available, is_torch_tpu_available, BertPreTrainedModel, AutoModelForQuestionAnswering
 from transformers.trainer_utils import PredictionOutput
 
 if is_datasets_available():
@@ -67,8 +67,14 @@ class QuestionAnsweringTrainer(Trainer):
             from torch.nn import CrossEntropyLoss
             import torch
             loss_f  = CrossEntropyLoss()
-            start_l = loss_f(torch.tensor(output.predictions[0]), torch.tensor(label_pos[0]))
-            metrics["eval_loss"] = start_l.item()
+            s1,e1 = output.predictions
+            s2,e2 = label_pos
+            start_l = loss_f(torch.tensor(s1), torch.tensor(s2))
+            end_l  = loss_f(torch.tensor(e1), torch.tensor(e2))
+            total = (start_l + end_l)/2
+            metrics['loss'] = total.item()
+            metrics['eval_f1'] = metrics['f1']
+            metrics['eval_exact_match'] = metrics['exact_match']
             self.log(metrics)
         else:
             metrics = {}
@@ -114,3 +120,54 @@ class QuestionAnsweringTrainer(Trainer):
             test_examples, test_dataset, output.predictions, self.args
         )
         return predictions
+
+class CnnQuetionAnsweringModel(BertPreTrainedModel):
+    def __init__(self,model_name_or_path,from_tf, config):
+        super().__init__(config)
+
+        self.model = AutoModelForQuestionAnswering.from_pretrained(
+            model_name_or_path,
+            from_tf=from_tf,
+            config=config
+        )
+
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        start_positions=None,
+        end_positions=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+    ):
+        
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+        sequence_output = outputs[0]
+
+        logits = self.qa_outputs(sequence_output)
+        start_logits, end_logits = logits.split(1, dim=-1)
+        start_logits = start_logits.squeeze(-1)
+        end_logits = end_logits.squeeze(-1)
+
+        total_loss = None
+        if start_positions is not None and end_positions is not None:
+            # If we are on multi-GPU, split add a dimension
+            if len(start_positions.size()) > 1:
+                start_positions = start_positions.squeeze(-1)
+            if len(end_positions.size()) > 1:
+                end_positions = end
