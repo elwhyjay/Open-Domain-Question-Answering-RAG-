@@ -72,7 +72,7 @@ class QuestionAnsweringTrainer(Trainer):
             start_l = loss_f(torch.tensor(s1), torch.tensor(s2))
             end_l  = loss_f(torch.tensor(e1), torch.tensor(e2))
             total = (start_l + end_l)/2
-            metrics['loss'] = total.item()
+            metrics['eval_loss'] = total.item()
             metrics['eval_f1'] = metrics['f1']
             metrics['eval_exact_match'] = metrics['exact_match']
             self.log(metrics)
