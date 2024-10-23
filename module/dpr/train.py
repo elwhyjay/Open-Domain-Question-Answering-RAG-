@@ -27,7 +27,7 @@ def main():
     
     batch_size = 8
     data_path = "../../../data/train_dataset"
-    load_weight_path = './colbert/colbert_pretrain_v3.pth'   
+    
     lr = 2e-6
     args = TrainingArguments(
         output_dir="dense_retrieval",
@@ -48,7 +48,7 @@ def main():
     train_dataset = pd.DataFrame(datasets["train"])
     train_dataset = train_dataset.reset_index(drop=True)
     train_dataset = set_columns(train_dataset)
-    print(train_dataset.head())
+    
     #토크나이저
     train_context, train_query = tokenize_colbert(train_dataset, tokenizer,corpus='both')
 

@@ -265,6 +265,7 @@ def run_mrc(
             examples=examples,
             features=features,
             predictions=predictions,
+            n_best_size=data_args.top_k_retrieval,
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
             is_eval = training_args.do_eval

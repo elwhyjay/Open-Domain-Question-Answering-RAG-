@@ -41,11 +41,11 @@ def train(cfg: DictConfig):
     model_args = ModelArguments(**cfg.get("model"))
     data_args = DataTrainingArguments(**cfg.get("data"))
     training_args = TrainingArguments(**cfg.get("train"))
-
+    
     # [참고] argument를 manual하게 수정하고 싶은 경우에 아래와 같은 방식을 사용할 수 있습니다
     # training_args.per_device_train_batch_size = 4
     # print(training_args.per_device_train_batch_size)
-    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}_v2"
+    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}"
     
     
     print(f"model is from {model_args.model_name_or_path}")
@@ -77,7 +77,8 @@ def train(cfg: DictConfig):
         train_dataset  = concatenate_datasets([datasets['train'], korQuad_datasets])
         validation_datasets = datasets['validation']
         datasets = DatasetDict({'train': train_dataset, 'validation': validation_datasets})
-
+    
+    
     training_args.output_dir = os.path.join(training_args.output_dir, project_name)
     wandb.init(project="mrc", name=project_name)
     wandb.config.update(

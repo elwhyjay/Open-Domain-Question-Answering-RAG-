@@ -1,6 +1,7 @@
 *.json
 *bin
-
+*.pth
+*.ipynb
 
 __pycache__
 

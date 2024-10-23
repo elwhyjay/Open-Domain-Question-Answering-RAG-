@@ -4,6 +4,8 @@ import sys
 from typing import Callable, Dict, List, NoReturn, Tuple
 from datetime import datetime, timedelta, timezone
 
+import json
+import torch
 import numpy as np
 from module.arguments import DataTrainingArguments, ModelArguments
 from datasets import (
@@ -17,6 +19,7 @@ from datasets import (
 )
 from module.sparse_retrieval import SparseRetrieval,BM25Retrieval,BM25andTfidfRetrieval
 from module.trainer_qa import QuestionAnsweringTrainer
+from module.dense_retrieval import ColBERTRetrieval
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -28,6 +31,8 @@ from transformers import (
     set_seed,
 )
 from module.utils_qa import check_no_error, postprocess_qa_predictions
+from module.dpr.tokenizer import *
+from module.dpr.model import ColbertModel
 from omegaconf import DictConfig, OmegaConf
 
 from module.mrc import run_mrc
@@ -97,10 +102,10 @@ def inference(cfg: DictConfig):
 
     # True일 경우 : run passage retrieval
     if data_args.eval_retrieval:
-        datasets = run_sparse_retrieval(
-            tokenizer.tokenize, datasets, training_args, data_args,
-        )
-
+        # datasets = run_sparse_retrieval(
+        #     tokenizer.tokenize, datasets, training_args, data_args,
+        # )
+        datasets = run_colbert_retrieval(datasets)
     # eval or predict mrc model
     if training_args.do_eval or training_args.do_predict:
         run_mrc(data_args, training_args, model_args, datasets, training_tokenizer, model)
@@ -167,3 +172,87 @@ def run_sparse_retrieval(
     return datasets
 
 
+def run_colbert_retrieval(datasets):
+    test_dataset = datasets["validation"].flatten_indices().to_pandas()
+    MODEL_NAME = 'klue/bert-base'
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    model_config =  AutoConfig.from_pretrained(MODEL_NAME)
+    special_tokens={'additional_special_tokens' :['[Q]','[D]']}
+    ret_tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    ret_tokenizer.add_special_tokens(special_tokens)
+    model = ColbertModel.from_pretrained(MODEL_NAME)
+    model.resize_token_embeddings(ret_tokenizer.vocab_size + 2)
+
+
+    model.to(device)
+
+
+    model.load_state_dict(torch.load('/data/ephemeral/home/LYJ/level2-mrc-nlp-05/module/dpr/colbert/compare_colbert_pretrain_v3_finetune_6.pth'))
+
+    print('opening wiki passage...')
+    with open('/data/ephemeral/home/LYJ/data/wikipedia_documents.json', "r", encoding="utf-8") as f:
+        wiki = json.load(f)
+    context = list(dict.fromkeys([v["text"] for v in wiki.values()]))
+    print('wiki loaded!!!')
+
+    query= list(test_dataset['question'])
+    mrc_ids =test_dataset['id']
+    length = len(test_dataset)
+
+
+    batched_p_embs = []
+    with torch.no_grad():
+        model.eval
+
+        q_seqs_val = tokenize_colbert(query,ret_tokenizer,corpus='query').to('cuda')
+        q_emb = model.query(**q_seqs_val).to('cpu')
+        print(q_emb.size())
+
+        print(q_emb.size())
+
+        print('Start passage embedding......')
+        p_embs=[]
+        for step,p in enumerate(tqdm(context)):
+            p = tokenize_colbert(p,ret_tokenizer,corpus='doc').to('cuda')
+            p_emb = model.doc(**p).to('cpu').numpy()
+            p_embs.append(p_emb)
+            if (step+1)%200 ==0:
+                batched_p_embs.append(p_embs)
+                p_embs=[]
+        batched_p_embs.append(p_embs)
+    
+
+
+    dot_prod_scores = model.get_score(q_emb,batched_p_embs,eval=True)
+    print(dot_prod_scores.size())
+
+    rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
+    print(dot_prod_scores)
+    print(rank)
+    torch.save(rank,'./dpr/colbert/inferecne_colbert_rank.pth')
+    print(rank.size())
+    
+
+    k = 50
+    passages=[]
+
+    for idx in range(length):
+        passage=''
+        for i in range(k):
+            passage += context[rank[idx][i]]
+            passage += ' '
+        passages.append(passage)
+
+    df = pd.DataFrame({'question':query,'id':mrc_ids,'context':passages})
+    f = Features(
+            {
+                "context": Value(dtype="string", id=None),
+                "id": Value(dtype="string", id=None),
+                "question": Value(dtype="string", id=None),
+            }
+        )
+
+    complete_datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
+    return complete_datasets

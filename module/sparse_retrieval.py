@@ -9,6 +9,7 @@ from typing import List, NoReturn, Optional, Tuple, Union
 import faiss
 import numpy as np
 import pandas as pd
+import torch
 from datasets import Dataset, concatenate_datasets, load_from_disk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
@@ -958,7 +959,9 @@ class BM25andTfidfRetrieval:
             tf_doc_scores.append(result[i, :][sorted_result].tolist()[:k])
             tf_doc_indices.append(sorted_result.tolist()[:k])
         return bm25_doc_scores, bm25_doc_indices, tf_doc_scores, tf_doc_indices
-    
+
+
+
 if __name__ == "__main__":
 
     import argparse

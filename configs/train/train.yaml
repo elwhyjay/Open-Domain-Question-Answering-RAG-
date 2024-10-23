@@ -1,5 +1,5 @@
 model:
-  model_name_or_path: klue/bert-base
+  model_name_or_path: klue/roberta-large
   config_name: null
   tokenizer_name: null
 
@@ -23,15 +23,15 @@ train:
   do_eval: true
   overwrite_output_dir: true
   report_to: 'wandb'
-  per_device_train_batch_size: 24
+  per_device_train_batch_size: 8
   per_device_eval_batch_size: 4
   logging_strategy: 'steps'
   logging_steps: 50
   evaluation_strategy: 'epoch'
   save_strategy: 'epoch'
-  save_total_limit: 2
-  learning_rate: 3e-5
-  num_train_epochs: 15
+  save_total_limit: 1
+  learning_rate: 6e-6
+  num_train_epochs: 10
   warmup_steps: 300
   seed: 42
   dataloader_num_workers: 4
