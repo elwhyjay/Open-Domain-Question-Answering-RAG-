@@ -15,7 +15,7 @@ from datasets import (
     load_from_disk,
     load_metric,
 )
-from module.sparse_retrieval import SparseRetrieval,BM25Retrieval
+from module.sparse_retrieval import SparseRetrieval,BM25Retrieval,BM25andTfidfRetrieval
 from module.trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
@@ -45,10 +45,9 @@ def inference(cfg: DictConfig):
     data_args = DataTrainingArguments(**cfg.get("data"))
     training_args = TrainingArguments(**cfg.get("train"))
     
-    result_path = f"{model_args.model_name_or_path.split('/')[-1]}_train_dataset"
+    result_path = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}_{datetime.now(timezone(timedelta(hours=9))).strftime('%m-%d-%H')}"
     training_args.output_dir = os.path.join(training_args.output_dir, result_path)
-    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_train_dataset"
-    
+    project_name = f"{model_args.model_name_or_path.split('/')[-1]}_train_dataset_bm25Plus_max512_stride256"
     model_path = os.path.join(model_args.saved_model_path,project_name)
     #training_args.do_train = True
 
@@ -85,6 +84,11 @@ def inference(cfg: DictConfig):
         else model_args.model_name_or_path,
         use_fast=True,
     )
+    
+    training_tokenizer = AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        use_fast=True,
+    )
     model = AutoModelForQuestionAnswering.from_pretrained(
         model_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -99,7 +103,7 @@ def inference(cfg: DictConfig):
 
     # eval or predict mrc model
     if training_args.do_eval or training_args.do_predict:
-        run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
+        run_mrc(data_args, training_args, model_args, datasets, training_tokenizer, model)
 
     
 def run_sparse_retrieval(
@@ -115,11 +119,15 @@ def run_sparse_retrieval(
     # retriever = SparseRetrieval(
     #     tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
     # )
+    # retriever = BM25andTfidfRetrieval(
+    #     tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
+    # )
+    # retriever.get_bm25_embedding()
+    # retriever.get_tfidf_embedding()
     retriever = BM25Retrieval(
         tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
     )
     retriever.get_sparse_embedding()
-
     if data_args.use_faiss:
         retriever.build_faiss(num_clusters=data_args.num_clusters)
         df = retriever.retrieve_faiss(

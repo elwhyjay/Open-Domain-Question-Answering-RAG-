@@ -261,7 +261,7 @@ def run_mrc(
     # Post-processing:
     def post_processing_function(examples, features, predictions, training_args):
         # Post-processing: start logits과 end logits을 original context의 정답과 match시킵니다.
-        predictions,label_pos = postprocess_qa_predictions(
+        result = postprocess_qa_predictions(
             examples=examples,
             features=features,
             predictions=predictions,
@@ -269,6 +269,10 @@ def run_mrc(
             output_dir=training_args.output_dir,
             is_eval = training_args.do_eval
         )
+        if training_args.do_eval:
+            predictions, label_pos = result
+        else:
+            predictions = result
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [
             {"id": k, "prediction_text": v} for k, v in predictions.items()
