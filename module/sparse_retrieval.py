@@ -183,6 +183,7 @@ class SparseRetrieval:
                 doc_scores, doc_indices = self.get_relevant_doc_bulk(
                     query_or_dataset["question"], k=topk
                 )
+                
             for idx, example in enumerate(
                 tqdm(query_or_dataset, desc="Sparse retrieval: ")
             ):
@@ -424,7 +425,7 @@ class BM25Retrieval:
             print("Embedding pickle load.")
         else:
             print("Build passage embedding")
-            self.p_embedding = BM25Plus(
+            self.p_embedding = BM25Okapi(
                 self.contexts,
                 tokenizer=self.tokenizer,
                 
@@ -724,7 +725,9 @@ class BM25andTfidfRetrieval:
 
         # Transform by vectorizer
         self.tokenizer = tokenize_fn
-
+        self.tfidfv = TfidfVectorizer(
+            tokenizer=tokenize_fn, ngram_range=(1, 2), max_features=50000,
+        )
         self.tfidf_embedding = None  # get_sparse_embedding()로 생성합니다
         self.bm25_embedding = None
         self.indexer = None  # build_faiss()로 생성합니다.
@@ -748,16 +751,17 @@ class BM25andTfidfRetrieval:
             print("BM25 Embedding pickle load.")
         else:
             print("Build passage BM25 embedding")
-            self.p_embedding = BM25Okapi(
+            self.bm25_embedding = BM25Plus(
                 self.contexts,
                 tokenizer=self.tokenizer,
                 
             )
             with open(bm25_emd_path, "wb") as file:
-                pickle.dump(self.p_embedding, file)
+                pickle.dump(self.bm_embedding, file)
             
             print("BM25 Embedding pickle saved.")
-    def get_sparse_embedding(self) -> NoReturn:
+
+    def get_tfidf_embedding(self) -> NoReturn:
         pickle_name = f"sparse_embedding.bin"
         tfidfv_name = f"tfidv.bin"
         emd_path = os.path.join(self.data_path, pickle_name)
@@ -765,7 +769,7 @@ class BM25andTfidfRetrieval:
 
         if os.path.isfile(emd_path) and os.path.isfile(tfidfv_path):
             with open(emd_path, "rb") as file:
-                self.p_embedding = pickle.load(file)
+                self.tfidf_embedding = pickle.load(file)
             with open(tfidfv_path, "rb") as file:
                 self.tfidfv = pickle.load(file)
             print("TF-IDF Embedding pickle load.")
@@ -815,8 +819,12 @@ class BM25andTfidfRetrieval:
                 print(self.contexts[bm_doc_indices[i]])
                 print(f"Top-{i+1} passage with score {tf_doc_scores[i]:4f}")
                 print(self.contexts[tf_doc_indices[i]])
-                scores = np.concatenate((bm_doc_scores, tf_doc_scores))
-                indices = np.concatenate((bm_doc_indices, tf_doc_indices))
+                scores = np.concatenate((bm_doc_scores, tf_doc_scores),axis=0)
+                indices = np.concatenate((bm_doc_indices, tf_doc_indices),axis=0)
+
+                maxtrix_for_sort = np.concatenate((scores, indices), axis=1)
+                sorted_result = maxtrix_for_sort[maxtrix_for_sort[:,0].argsort()[::-1]]
+                scores, indices = np.split(sorted_result, 2, axis=1)
 
             return (scores, [self.contexts[indices[i]] for i in range(topk*2)])
             
@@ -826,9 +834,27 @@ class BM25andTfidfRetrieval:
             # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
             total = []
             with timer("query exhaustive search"):
-                doc_scores, doc_indices = self.get_relevant_doc_bulk(
+                bm25_doc_scores, bm25_doc_indices,tfidf_doc_scores,tfidf_doc_indices = self.get_relevant_doc_bulk(
                     query_or_dataset["question"], k=topk
                 )
+            bm25_doc_scores = np.array(bm25_doc_scores)
+            bm25_doc_indices = np.array(bm25_doc_indices)
+            tfidf_doc_scores = np.array(tfidf_doc_scores)
+            tfidf_doc_indices = np.array(tfidf_doc_indices)
+            print(f"bm25_doc_scores shape : {bm25_doc_scores.shape}")
+            print(f"tfidf_doc_scores shape : {tfidf_doc_scores.shape}")
+            print(f"bm25_doc_indices shape : {bm25_doc_indices.shape}")
+            print(f"tfidf_doc_indices shape : {tfidf_doc_indices.shape}")
+
+            scores = np.concatenate((bm25_doc_scores, tfidf_doc_scores),axis=1)
+            indices = np.concatenate((bm25_doc_indices, tfidf_doc_indices),axis=1)
+            
+            for i in range(scores.shape[0]):
+                sorted_result = scores[i].argsort()[::-1]
+                scores[i] = scores[i][sorted_result]
+                indices[i] = indices[i][sorted_result]
+            
+            doc_indices = np.array(indices)
             for idx, example in enumerate(
                 tqdm(query_or_dataset, desc="Sparse retrieval: ")
             ):
@@ -879,6 +905,7 @@ class BM25andTfidfRetrieval:
         if not isinstance(result_tf, np.ndarray):
             result_tf = result_tf.toarray()
         
+        
 
         sorted_result_bm25 = np.argsort(result_bm25.squeeze())[::-1]
         sorted_result_tf = np.argsort(result_tf.squeeze())[::-1]
@@ -906,14 +933,31 @@ class BM25andTfidfRetrieval:
                     self.bm25_embedding.get_scores(tokenized_query) for tokenized_query in tqdm(query_tok)
                 ]
             )
+
+        query_vec = self.tfidfv.transform(queries)
+        assert (
+            np.sum(query_vec) != 0
+        ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
+
+        bm25_doc_scores = []
+        bm25_doc_indices = []
+        tf_doc_scores = []
+        tf_doc_indices = []
+        for i in range(bm_result.shape[0]):
+            sorted_result = np.argsort(bm_result[i, :])[::-1]
+            bm25_doc_scores.append(bm_result[i, :][sorted_result].tolist()[:k])
+            bm25_doc_indices.append(sorted_result.tolist()[:k])
         
-        doc_scores = []
-        doc_indices = []
+       
+        result = query_vec * self.tfidf_embedding.T
+        if not isinstance(result, np.ndarray):
+            result = result.toarray()
+        
         for i in range(result.shape[0]):
             sorted_result = np.argsort(result[i, :])[::-1]
-            doc_scores.append(result[i, :][sorted_result].tolist()[:k])
-            doc_indices.append(sorted_result.tolist()[:k])
-        return doc_scores, doc_indices
+            tf_doc_scores.append(result[i, :][sorted_result].tolist()[:k])
+            tf_doc_indices.append(sorted_result.tolist()[:k])
+        return bm25_doc_scores, bm25_doc_indices, tf_doc_scores, tf_doc_indices
     
 if __name__ == "__main__":
 
