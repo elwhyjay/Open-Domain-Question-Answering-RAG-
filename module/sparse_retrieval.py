@@ -417,7 +417,7 @@ class BM25Retrieval:
         """
 
         # Pickle을 저장합니다.
-        pickle_name = f"bm25_embedding.bin"
+        pickle_name = f"bm25Plus_embedding.bin"
         emd_path = os.path.join(self.data_path, pickle_name)
 
         if os.path.isfile(emd_path):
@@ -426,7 +426,7 @@ class BM25Retrieval:
             print("Embedding pickle load.")
         else:
             print("Build passage embedding")
-            self.p_embedding = BM25Okapi(
+            self.p_embedding = BM25Plus(
                 self.contexts,
                 tokenizer=self.tokenizer,
                 
