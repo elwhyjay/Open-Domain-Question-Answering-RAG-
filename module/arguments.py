@@ -96,3 +96,19 @@ class DataTrainingArguments:
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
     )
+
+@dataclass
+class CustomTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+    """
+    
+    retrieval_type: Optional[str] = field(
+        default="sparse",
+        metadata={"help": "sparse or dense retrieval"},
+    )
+
+    sparse_retrieval_type: Optional[str] = field(
+        default="bm25",
+        metadata={"help": "bm25 or tfidf retrieval"},
+    )
