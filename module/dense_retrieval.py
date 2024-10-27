@@ -12,6 +12,7 @@ from datasets import Dataset
 from tqdm.auto import tqdm
 from transformers import BertTokenizerFast
 from module.dpr.model import ColbertModel
+from module.sparse_retrieval import SparseRetrieval
 @contextmanager
 def timer(name):
     t0 = time.time()
@@ -19,9 +20,7 @@ def timer(name):
     print(f"[{name}] done in {time.time() - t0:.3f} s")
 
 def load_colbert_model(model_path: str, device: str) -> ColbertModel:
-    """
-    ColBERT 모델을 올바르게 로드하는 함수
-    
+    """  
     Args:
         model_path: 저장된 모델 경로
         device: 사용할 디바이스
@@ -48,7 +47,7 @@ def load_colbert_model(model_path: str, device: str) -> ColbertModel:
 class ColBERTRetrieval:
     def __init__(
         self,
-        model_path: str = '/data/ephemeral/home/LYJ/level2-mrc-nlp-05/module/dpr/colbert/compare_colbert_pretrain_v3_finetune_6.pth',
+        model_path: str ,
         data_path: Optional[str] = "../data/",
         context_path: Optional[str] = "wikipedia_documents.json",
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
@@ -206,7 +205,153 @@ class ColBERTRetrieval:
         
         return all_scores, all_indices
 
-    def preprocess_query(self, query: Union[str, List[str]]) -> dict:
-        """query를 전처리하는 메서드"""
-        inputs = self._tokenize(query)
-        return {k: v.to(self.device) for k, v in inputs.items()}
+class ReRankRetrieval:
+    def __init__(
+        self,
+        sparse_retriever: SparseRetrieval,
+        colbert_path: str,
+        data_path = "../data/",
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        batch_size: int = 32,
+        alpha: float = 0.5  # sparse와 dense 점수의 가중치
+    ) -> NoReturn:
+        """
+        Sparse retrieval 결과를 받아 dense retrieval로 re-ranking 하는 클래스
+        $$$negative sampe 구현을 해야함$$$$
+        Arguments:
+            sparse_retriever: 초기 retrieval을 위한 SparseRetrieval 인스턴스
+            colbert_path: 학습된 ColBERT 모델 경로
+            data_path: 데이터가 저장된 경로
+            device: 연산 장치
+            batch_size: 배치 크기
+            alpha: sparse와 dense 점수를 결합할 때 sparse 점수의 가중치 (1-alpha가 dense 점수 가중치)
+        """
+        self.sparse_retriever = sparse_retriever
+        self.device = device
+        self.batch_size = batch_size
+        self.alpha = alpha
+        special_tokens={'additional_special_tokens' :['[Q]','[D]']}
+        self.ret_tokenizer = AutoTokenizer.from_pretrained('klue/bert-base')
+        self.ret_tokenizer.add_special_tokens(special_tokens)
+        model = ColbertModel.from_pretrained('klue/bert-base')
+        model.resize_token_embeddings(self.ret_tokenizer.vocab_size + 2)
+
+
+        model.to(device)
+        # ColBERT 모델 로드
+        self.colbert = model.load_state_dict(torch.load('/data/ephemeral/home/LYJ/level2-mrc-nlp-05/module/dpr/colbert/compare_colbert_pretrain_v3_finetune_6.pth'))
+
+        self.colbert.eval()
+        
+        self.max_length = 512
+
+    def _tokenize(self, texts) -> dict:
+
+        if isinstance(texts, str):
+            texts = [texts]
+            
+        return self.tokenizer(
+            texts,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+    def rerank_documents(self, query, docs, 
+                        sparse_scores, topk: int = 5):
+
+        with torch.no_grad():
+            # Query encoding
+            q_inputs = self._tokenize(query)
+            q_inputs = {k: v.to(self.device) for k, v in q_inputs.items()}
+            Q = self.colbert.query(**q_inputs)
+            
+            # Document encoding and scoring
+            dense_scores = []
+            for i in range(0, len(docs), self.batch_size):
+                batch_docs = docs[i:i + self.batch_size]
+                d_inputs = self._tokenize(batch_docs)
+                d_inputs = {k: v.to(self.device) for k, v in d_inputs.items()}
+                D = self.colbert.doc(**d_inputs)
+                
+                # Calculate scores for batch
+                batch_scores = self.colbert.get_score(Q, [D], eval=True)
+                dense_scores.extend(batch_scores.cpu().squeeze().tolist())
+            
+            # Normalize scores
+            sparse_scores = np.array(sparse_scores)
+            dense_scores = np.array(dense_scores)
+            
+            # Min-Max normalization
+            sparse_scores = (sparse_scores - sparse_scores.min()) / (sparse_scores.max() - sparse_scores.min())
+            dense_scores = (dense_scores - dense_scores.min()) / (dense_scores.max() - dense_scores.min())
+            
+            # Combine scores
+            final_scores = self.alpha * sparse_scores + (1 - self.alpha) * dense_scores
+            
+            # Get top-k
+            top_k_indices = np.argsort(final_scores)[::-1][:topk]
+            top_k_scores = final_scores[top_k_indices]
+            
+            return top_k_scores.tolist(), top_k_indices.tolist()
+
+    def retrieve(
+        self, query_or_dataset, topk = 5,
+        candidate_k = None  # sparse retrieval에서 가져올 후보 문서 수
+    ) :
+        if candidate_k is None:
+            candidate_k = topk * 3
+
+        if isinstance(query_or_dataset, str):
+            # Sparse retrieval로 후보 추출
+            self.parse_retriever.get_dense_embedding()
+            sparse_scores, candidate_docs_indices = self.sparse_retriever.get_relevant_doc(
+                query_or_dataset, topk=candidate_k
+            )
+            candidate_docs = [self.contexts[idx] for idx in candidate_docs_indices]
+            # Re-ranking
+            final_scores, doc_indices = self.rerank_documents(
+                query_or_dataset, candidate_docs, sparse_scores,  topk=topk
+            )
+            
+            print("[Search query]\n", query_or_dataset, "\n")
+            for i in range(topk):
+                print(f"Top-{i+1} passage with score {final_scores[i]:4f}")
+                print(candidate_docs[doc_indices[i]])
+            
+            return (final_scores, [candidate_docs[idx] for idx in doc_indices])
+
+        elif isinstance(query_or_dataset, Dataset):
+            total = []
+            with timer("hybrid retrieval"):
+                for idx, example in enumerate(tqdm(query_or_dataset, desc="Hybrid retrieval: ")):
+                    query = example["question"]
+                    
+                    # Sparse retrieval로 후보 추출
+                    self.parse_retriever.get_dense_embedding()
+                    sparse_scores, candidate_docs_indices = self.sparse_retriever.get_relevant_doc_bulk(
+                        query, topk=candidate_k
+                    )
+                    candidate_docs = [self.contexts[idx] for idx in candidate_docs_indices]
+                    # Re-ranking
+                    final_scores, doc_indices = self.rerank_documents(
+                        query, candidate_docs, sparse_scores, topk=topk
+                    )
+                    
+                    # 결과 저장
+                    tmp = {
+                        "question": example["question"],
+                        "id": example["id"],
+                        "context": " ".join(
+                            [candidate_docs[did] for did in doc_indices]
+                        ),
+                    }
+                    
+                    if "context" in example.keys() and "answers" in example.keys():
+                        tmp["original_context"] = example["context"]
+                        tmp["answers"] = example["answers"]
+                    
+                    total.append(tmp)
+
+            return pd.DataFrame(total)
