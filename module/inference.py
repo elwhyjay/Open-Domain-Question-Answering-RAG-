@@ -19,7 +19,7 @@ from datasets import (
 )
 from module.sparse_retrieval import SparseRetrieval,BM25Retrieval,BM25andTfidfRetrieval
 from module.trainer_qa import QuestionAnsweringTrainer
-from module.dense_retrieval import ColBERTRetrieval, ReRankRetrieval
+from module.dense_retrieval import ColBERTRetrieval, ReRankRetrieval, DenseRetrieval
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -27,8 +27,8 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from module.dpr.tokenizer import *
-from module.dpr.model import ColbertModel
+from module.col_dpr.tokenizer import *
+from module.col_dpr.model import ColbertModel
 from module.es_retrieval import ESRetrieval
 from omegaconf import DictConfig, OmegaConf
 from contextlib import contextmanager
@@ -110,7 +110,10 @@ def inference(cfg: DictConfig):
         #     tokenizer.tokenize, datasets, training_args, data_args,
         # )
         if customtraining_args.retrieval_type == "dense":
-            datasets = run_colbert_retrieval(datasets)
+            if customtraining_args.dense_retrieval_type == "colbert":
+                datasets = run_colbert_retrieval(datasets)
+            else:
+                datasets = run_dense_retrieval(model_args=model_args, data_args=data_args, training_args=training_args)
         else:
             datasets = run_sparse_retrieval(
                 tokenizer.tokenize, datasets, training_args, data_args, customtraining_args.sparse_retrieval_type
@@ -183,6 +186,58 @@ def run_sparse_retrieval(
     datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
     return datasets
 
+def run_dense_retrieval(
+    tokenize_fn: Callable[[str], List[str]],
+    datasets: DatasetDict,
+    model_args: ModelArguments,
+    training_args: TrainingArguments,
+    data_args: DataTrainingArguments,
+    data_path: str = "../data",
+    context_path: str = "wikipedia_documents.json",
+) -> DatasetDict:
+
+    retriever = DenseRetrieval(
+        model_args=model_args, data_args=data_args, training_args=training_args, context_path=context_path
+    )
+
+
+    if data_args.use_faiss:
+        retriever.build_faiss(num_clusters=data_args.num_clusters)
+        df = retriever.retrieve_faiss(
+            datasets["validation"], topk=data_args.top_k_retrieval
+        )
+    else:
+        df = retriever.retrieve(datasets["validation"], topk=data_args.top_k_retrieval)
+
+    # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.
+    if training_args.do_predict:
+        f = Features(
+            {
+                "context": Value(dtype="string", id=None),
+                "id": Value(dtype="string", id=None),
+                "question": Value(dtype="string", id=None),
+            }
+        )
+
+    # train data 에 대해선 정답이 존재하므로 id question context answer 로 데이터셋이 구성됩니다.
+    elif training_args.do_eval:
+        f = Features(
+            {
+                "answers": Sequence(
+                    feature={
+                        "text": Value(dtype="string", id=None),
+                        "answer_start": Value(dtype="int32", id=None),
+                    },
+                    length=-1,
+                    id=None,
+                ),
+                "context": Value(dtype="string", id=None),
+                "id": Value(dtype="string", id=None),
+                "question": Value(dtype="string", id=None),
+            }
+        )
+    datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
+    return datasets
 
 def run_colbert_retrieval(datasets):
     test_dataset = datasets["validation"].flatten_indices().to_pandas()

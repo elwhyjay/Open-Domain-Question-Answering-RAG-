@@ -118,7 +118,10 @@ class CustomTrainingArguments:
         default="sparse",
         metadata={"help": "sparse or dense retrieval"},
     )
-
+    dense_retrieval_type: Optional[str] = field(
+        default="dense",
+        metadata={"help": "Normal dense or colbert retrieval"},
+    )
     sparse_retrieval_type: Optional[str] = field(
         default="bm25",
         metadata={"help": "bm25 or tfidf retrieval"},

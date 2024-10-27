@@ -22,4 +22,5 @@ train:
   do_predict: true
 custom:
   retrieval_type: sparse
+  dense_retrieval_type: colbert #dense, colbert
   sparse_retrieval_type: bm25
