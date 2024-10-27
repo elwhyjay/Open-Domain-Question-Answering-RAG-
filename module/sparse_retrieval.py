@@ -417,7 +417,7 @@ class BM25Retrieval:
         """
 
         # Pickle을 저장합니다.
-        pickle_name = f"bm25Plus_embedding.bin"
+        pickle_name = f"bm2Okapi_embedding.bin"
         emd_path = os.path.join(self.data_path, pickle_name)
 
         if os.path.isfile(emd_path):
@@ -426,7 +426,7 @@ class BM25Retrieval:
             print("Embedding pickle load.")
         else:
             print("Build passage embedding")
-            self.p_embedding = BM25Plus(
+            self.p_embedding = BM25Okapi(
                 self.contexts,
                 tokenizer=self.tokenizer,
                 
@@ -502,7 +502,7 @@ class BM25Retrieval:
         if isinstance(query_or_dataset, str):
             doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset, k=topk)
             print("[Search query]\n", query_or_dataset, "\n")
-
+            print(f"length of doc indices:{ len(doc_indices)}")
             for i in range(topk):
                 print(f"Top-{i+1} passage with score {doc_scores[i]:4f}")
                 print(self.contexts[doc_indices[i]])
@@ -705,6 +705,8 @@ class BM25Retrieval:
 
         return D.tolist(), I.tolist()
 
+# BM25 + TF-IDF Retrieval
+# top20개의 passage를 반환합니다.
 class BM25andTfidfRetrieval:
     def __init__(
         self,

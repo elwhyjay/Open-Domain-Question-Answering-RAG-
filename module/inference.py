@@ -16,22 +16,17 @@ from datasets import (
     Sequence,
     Value,
     load_from_disk,
-    load_metric,
 )
 from module.sparse_retrieval import SparseRetrieval,BM25Retrieval,BM25andTfidfRetrieval
 from module.trainer_qa import QuestionAnsweringTrainer
-from module.dense_retrieval import ColBERTRetrieval
+from module.dense_retrieval import ColBERTRetrieval, ReRankRetrieval
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
     AutoTokenizer,
-    DataCollatorWithPadding,
-    EvalPrediction,
-    HfArgumentParser,
     TrainingArguments,
     set_seed,
 )
-from module.utils_qa import check_no_error, postprocess_qa_predictions
 from module.dpr.tokenizer import *
 from module.dpr.model import ColbertModel
 from module.es_retrieval import ESRetrieval
@@ -61,6 +56,7 @@ def inference(cfg: DictConfig):
     result_path = f"{model_args.model_name_or_path.split('/')[-1]}_{data_args.dataset_name.split('/')[-1]}_{datetime.now(timezone(timedelta(hours=9))).strftime('%m-%d-%H')}"
     training_args.output_dir = os.path.join(training_args.output_dir, result_path)
     project_name = f"{model_args.model_name_or_path.split('/')[-1]}_train_dataset_bm25Plus_max512_stride256"
+    #project_name = f"roberta-large_train_preprocessed_fp16+gradient_accumulation_v2"
     model_path = os.path.join(model_args.saved_model_path,project_name)
     #training_args.do_train = True
 
@@ -149,12 +145,6 @@ def run_sparse_retrieval(
             )
         retriever.get_sparse_embedding()
 
-    # retriever = BM25andTfidfRetrieval(
-    #     tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
-    # )
-    # retriever.get_bm25_embedding()
-    # retriever.get_tfidf_embedding()
-    
     if data_args.use_faiss:
         retriever.build_faiss(num_clusters=data_args.num_clusters)
         df = retriever.retrieve_faiss(
@@ -282,169 +272,14 @@ def run_colbert_retrieval(datasets):
     complete_datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
     return complete_datasets
 
-
-class HybridRetrieval:
-    def __init__(
-        self,
-        sparse_retriever: SparseRetrieval,
-        colbert_path: str,
-        data_path = "../data/",
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
-        batch_size: int = 32,
-        alpha: float = 0.5  # sparse와 dense 점수의 가중치
-    ) -> NoReturn:
-        """
-        Arguments:
-            sparse_retriever: 초기 retrieval을 위한 SparseRetrieval 인스턴스
-            colbert_path: 학습된 ColBERT 모델 경로
-            data_path: 데이터가 저장된 경로
-            device: 연산 장치
-            batch_size: 배치 크기
-            alpha: sparse와 dense 점수를 결합할 때 sparse 점수의 가중치 (1-alpha가 dense 점수 가중치)
-        """
-        self.sparse_retriever = sparse_retriever
-        self.device = device
-        self.batch_size = batch_size
-        self.alpha = alpha
-        special_tokens={'additional_special_tokens' :['[Q]','[D]']}
-        self.ret_tokenizer = AutoTokenizer.from_pretrained('klue/bert-base')
-        self.ret_tokenizer.add_special_tokens(special_tokens)
-        model = ColbertModel.from_pretrained('klue/bert-base')
-        model.resize_token_embeddings(self.ret_tokenizer.vocab_size + 2)
-
-
-        model.to(device)
-        # ColBERT 모델 로드
-        self.colbert = model.load_state_dict(torch.load('/data/ephemeral/home/LYJ/level2-mrc-nlp-05/module/dpr/colbert/compare_colbert_pretrain_v3_finetune_6.pth'))
-
-        self.colbert.eval()
-        
-        self.max_length = 512
-
-    def _tokenize(self, texts) -> dict:
-        """텍스트를 토크나이즈하는 내부 메서드"""
-        if isinstance(texts, str):
-            texts = [texts]
-            
-        return self.tokenizer(
-            texts,
-            max_length=self.max_length,
-            padding='max_length',
-            truncation=True,
-            return_tensors='pt'
+def run_rerank_retrieval(datasets,data_args: DataTrainingArguments,):
+    df = ReRankRetrieval(datasets["validation"], topk = data_args.top_k_retrieval)
+    f = Features(
+            {
+                "context": Value(dtype="string", id=None),
+                "id": Value(dtype="string", id=None),
+                "question": Value(dtype="string", id=None),
+            }
         )
-
-    def rerank_documents(self, query, docs, 
-                        sparse_scores, topk: int = 5):
-        """
-        주어진 문서들을 ColBERT로 재순위화합니다.
-
-        Args:
-            query: 검색 쿼리
-            docs: 재순위화할 문서 리스트
-            sparse_scores: Sparse Retrieval에서 얻은 점수들
-            topk: 반환할 상위 문서 수
-        
-        Returns:
-            (최종 점수 리스트, 재정렬된 문서 인덱스 리스트)
-        """
-        with torch.no_grad():
-            # Query encoding
-            q_inputs = self._tokenize(query)
-            q_inputs = {k: v.to(self.device) for k, v in q_inputs.items()}
-            Q = self.colbert.query(**q_inputs)
-            
-            # Document encoding and scoring
-            dense_scores = []
-            for i in range(0, len(docs), self.batch_size):
-                batch_docs = docs[i:i + self.batch_size]
-                d_inputs = self._tokenize(batch_docs)
-                d_inputs = {k: v.to(self.device) for k, v in d_inputs.items()}
-                D = self.colbert.doc(**d_inputs)
-                
-                # Calculate scores for batch
-                batch_scores = self.colbert.get_score(Q, [D], eval=True)
-                dense_scores.extend(batch_scores.cpu().squeeze().tolist())
-            
-            # Normalize scores
-            sparse_scores = np.array(sparse_scores)
-            dense_scores = np.array(dense_scores)
-            
-            # Min-Max normalization
-            sparse_scores = (sparse_scores - sparse_scores.min()) / (sparse_scores.max() - sparse_scores.min())
-            dense_scores = (dense_scores - dense_scores.min()) / (dense_scores.max() - dense_scores.min())
-            
-            # Combine scores
-            final_scores = self.alpha * sparse_scores + (1 - self.alpha) * dense_scores
-            
-            # Get top-k
-            top_k_indices = np.argsort(final_scores)[::-1][:topk]
-            top_k_scores = final_scores[top_k_indices]
-            
-            return top_k_scores.tolist(), top_k_indices.tolist()
-
-    def retrieve(
-        self, query_or_dataset, topk = 5,
-        candidate_k = None  # sparse retrieval에서 가져올 후보 문서 수
-    ) :
-        """
-        Sparse Retrieval로 후보를 추출한 후 ColBERT로 재순위화를 수행합니다.
-        
-        Args:
-            query_or_dataset: 쿼리 문자열 또는 데이터셋
-            topk: 최종적으로 반환할 문서 수
-            candidate_k: Sparse Retrieval에서 가져올 후보 문서 수 (None이면 topk의 3배)
-        """
-        if candidate_k is None:
-            candidate_k = topk * 2
-
-        if isinstance(query_or_dataset, str):
-            # Sparse retrieval로 후보 추출
-            sparse_scores, candidate_docs = self.sparse_retriever.retrieve(
-                query_or_dataset, topk=candidate_k
-            )
-            
-            # Re-ranking
-            final_scores, doc_indices = self.rerank_documents(
-                query_or_dataset, candidate_docs, sparse_scores, topk=topk
-            )
-            
-            print("[Search query]\n", query_or_dataset, "\n")
-            for i in range(topk):
-                print(f"Top-{i+1} passage with score {final_scores[i]:4f}")
-                print(candidate_docs[doc_indices[i]])
-            
-            return (final_scores, [candidate_docs[idx] for idx in doc_indices])
-
-        elif isinstance(query_or_dataset, Dataset):
-            total = []
-            with timer("hybrid retrieval"):
-                for idx, example in enumerate(tqdm(query_or_dataset, desc="Hybrid retrieval: ")):
-                    query = example["question"]
-                    
-                    # Sparse retrieval로 후보 추출
-                    sparse_scores, candidate_docs = self.sparse_retriever.retrieve(
-                        query, topk=candidate_k
-                    )
-                    
-                    # Re-ranking
-                    final_scores, doc_indices = self.rerank_documents(
-                        query, candidate_docs, sparse_scores, topk=topk
-                    )
-                    
-                    # 결과 저장
-                    tmp = {
-                        "question": example["question"],
-                        "id": example["id"],
-                        "context": " ".join(
-                            [candidate_docs[did] for did in doc_indices]
-                        ),
-                    }
-                    
-                    if "context" in example.keys() and "answers" in example.keys():
-                        tmp["original_context"] = example["context"]
-                        tmp["answers"] = example["answers"]
-                    
-                    total.append(tmp)
-
-            return pd.DataFrame(total)
+    datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
+    return datasets

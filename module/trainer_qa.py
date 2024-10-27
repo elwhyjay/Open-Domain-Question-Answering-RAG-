@@ -32,7 +32,7 @@ class QuestionAnsweringTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.eval_examples = eval_examples
         self.post_process_function = post_process_function
-
+        
     def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
         eval_dataset = self.eval_dataset if eval_dataset is None else eval_dataset
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
@@ -64,12 +64,14 @@ class QuestionAnsweringTrainer(Trainer):
                 eval_examples, eval_dataset, output.predictions, self.args
             )
             metrics = self.compute_metrics(eval_preds)
+            # if fp 16 is used, loss is a scalar. We need to put it to a tensor
             from torch.nn import CrossEntropyLoss
             import torch
             loss_f  = CrossEntropyLoss()
             s1,e1 = output.predictions
             s2,e2 = label_pos
             start_l = loss_f(torch.tensor(s1), torch.tensor(s2))
+
             end_l  = loss_f(torch.tensor(e1), torch.tensor(e2))
             total = (start_l + end_l)/2
             metrics['eval_loss'] = total.item()

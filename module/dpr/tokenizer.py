@@ -40,11 +40,11 @@ def tokenize_colbert(dataset,tokenizer,corpus):
             preprocessed_data.append('[Q] '+query)
 
         tokenized_query = tokenizer(
-        preprocessed_data,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=128
+            preprocessed_data,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=128
         )
         return tokenized_query
 
@@ -67,17 +67,17 @@ def tokenize_colbert(dataset,tokenizer,corpus):
             preprocessed_context.append('[D] '+context)
             preprocessed_query.append('[Q] '+query)
         tokenized_query = tokenizer(
-        preprocessed_query,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=128
+            preprocessed_query,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=128
         )
 
         tokenized_context = tokenizer(
-        preprocessed_context,
-        return_tensors="pt",
-        padding='max_length',
-        truncation=True,
+            preprocessed_context,
+            return_tensors="pt",
+            padding='max_length',
+            truncation=True,
         )
         return tokenized_context, tokenized_query

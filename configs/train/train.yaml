@@ -5,12 +5,11 @@ model:
 
 
 data:
-  dataset_name: ../data/train_dataset
-  overwrite_cache: false
+  dataset_name: ../data/train_preprocessed
   preprocessing_num_workers: null
   max_seq_length: 384
   pad_to_max_length: false
-  doc_stride: 128
+  doc_stride: 96
   max_answer_length: 30
   eval_retrieval: true
   num_clusters: 64
@@ -30,9 +29,12 @@ train:
   evaluation_strategy: 'epoch'
   save_strategy: 'epoch'
   save_total_limit: 1
-  learning_rate: 6e-6
-  num_train_epochs: 10
+  learning_rate: 9e-6
+  num_train_epochs: 3
   warmup_steps: 300
   seed: 42
   dataloader_num_workers: 4
   logging_first_step: true
+  fp16: false
+  gradient_accumulation_steps: 4
+  
