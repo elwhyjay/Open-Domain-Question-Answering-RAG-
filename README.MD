@@ -1,4 +1,4 @@
-# level 2. Open-Domain Question Answering
+# level 2. Open-Domain Question Answering (RAG)
 
 
 
@@ -11,10 +11,13 @@ python main.py mode=train
 
 ### DPR (Dense Passage Retrievel)
 ```bash
-python module/dense_ret.py 
+# bi-encoder dpr
+python module/dpr/dense_ret.py 
+# Colbert 
+python module/colbert/train.py
 ```
 
 ## inference
 ```bash
-python main.py mode=infernce
+python main.py mode=inference
 ```
