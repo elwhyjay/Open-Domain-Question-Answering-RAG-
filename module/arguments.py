@@ -13,6 +13,11 @@ class ModelArguments:
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
     )
+
+    dense_model_name_or_path: str = field(
+        default="klue/bert-base",
+        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"},
+    )
     
     model_name_or_path: str = field(
         default="klue/bert-base",
@@ -95,4 +100,29 @@ class DataTrainingArguments:
     )
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
+    )
+    num_neg: int = field(
+        default=2, metadata={"help": "Define how many negative passage per question."}
+    )
+    which_retrieval: str = field(
+        default="dense", metadata={"help": "dense or sparse"}
+    )
+
+@dataclass
+class CustomTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+    """
+    
+    retrieval_type: Optional[str] = field(
+        default="sparse",
+        metadata={"help": "sparse or dense retrieval"},
+    )
+    dense_retrieval_type: Optional[str] = field(
+        default="dense",
+        metadata={"help": "Normal dense or colbert retrieval"},
+    )
+    sparse_retrieval_type: Optional[str] = field(
+        default="bm25",
+        metadata={"help": "bm25 or tfidf retrieval"},
     )
