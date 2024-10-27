@@ -30,7 +30,7 @@ from transformers import (
 
 from ..arguments import DataTrainingArguments, ModelArguments
 from .model_ret import Encoder
-from .utils_ret import load_contexts, prepare_in_batch_negative, build_dense_embedding
+from .utils_ret import build_dense_embedding, load_contexts, prepare_in_batch_negative
 
 seed = 2024
 random.seed(seed)  # python random seed 고정

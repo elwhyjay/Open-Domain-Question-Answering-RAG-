@@ -1,16 +1,15 @@
+from typing import NoReturn
+
 import logging
 import os
-import sys
 import random
+import sys
+
+import hydra
 import numpy as np
 import torch
-from typing import NoReturn
-from omegaconf import DictConfig
-import hydra
-
-from module.arguments import DataTrainingArguments, ModelArguments
 from datasets import DatasetDict, load_from_disk, load_metric
-from module.trainer_qa import QuestionAnsweringTrainer
+from omegaconf import DictConfig
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -21,7 +20,11 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from module.utils_qa import set_seed, check_no_error, postprocess_qa_predictions
+
+from module.arguments import DataTrainingArguments, ModelArguments
+from module.trainer_qa import QuestionAnsweringTrainer
+from module.utils_qa import check_no_error, postprocess_qa_predictions, set_seed
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,10 +53,7 @@ def run_mrc(
     pad_on_right = tokenizer.padding_side == "right"
 
     # 오류가 있는지 확인합니다.
-    last_checkpoint, max_seq_length = check_no_error(
-        data_args, training_args, datasets, tokenizer
-    )
-
+    last_checkpoint, max_seq_length = check_no_error(data_args, training_args, datasets, tokenizer)
 
     # Train preprocessing / 전처리를 진행합니다.
     def prepare_train_features(examples):
@@ -112,19 +112,13 @@ def run_mrc(
                     token_end_index -= 1
 
                 # 정답이 span을 벗어났는지 확인합니다(정답이 없는 경우 CLS index로 label되어있음).
-                if not (
-                    offsets[token_start_index][0] <= start_char
-                    and offsets[token_end_index][1] >= end_char
-                ):
+                if not (offsets[token_start_index][0] <= start_char and offsets[token_end_index][1] >= end_char):
                     tokenized_examples["start_positions"].append(cls_index)
                     tokenized_examples["end_positions"].append(cls_index)
                 else:
                     # token_start_index 및 token_end_index를 answer의 끝으로 이동합니다.
                     # Note: answer가 마지막 단어인 경우 last offset을 따라갈 수 있습니다(edge case).
-                    while (
-                        token_start_index < len(offsets)
-                        and offsets[token_start_index][0] <= start_char
-                    ):
+                    while token_start_index < len(offsets) and offsets[token_start_index][0] <= start_char:
                         token_start_index += 1
                     tokenized_examples["start_positions"].append(token_start_index - 1)
                     while offsets[token_end_index][1] >= end_char:
@@ -159,7 +153,9 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            return_token_type_ids=False if "roberta" in model.config.model_type else True, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=(
+                False if "roberta" in model.config.model_type else True
+            ),  # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -169,7 +165,7 @@ def run_mrc(
         # evaluation을 위해, prediction을 context의 substring으로 변환해야합니다.
         # corresponding example_id를 유지하고 offset mappings을 저장해야합니다.
         tokenized_examples["example_id"] = []
-        
+
         if training_args.do_eval:
             tokenized_examples["start_positions"] = []
             tokenized_examples["end_positions"] = []
@@ -205,19 +201,13 @@ def run_mrc(
                         token_end_index -= 1
 
                     # 정답이 span을 벗어났는지 확인합니다(정답이 없는 경우 CLS index로 label되어있음).
-                    if not (
-                        offsets[token_start_index][0] <= start_char
-                        and offsets[token_end_index][1] >= end_char
-                    ):
+                    if not (offsets[token_start_index][0] <= start_char and offsets[token_end_index][1] >= end_char):
                         tokenized_examples["start_positions"].append(cls_index)
                         tokenized_examples["end_positions"].append(cls_index)
                     else:
                         # token_start_index 및 token_end_index를 answer의 끝으로 이동합니다.
                         # Note: answer가 마지막 단어인 경우 last offset을 따라갈 수 있습니다(edge case).
-                        while (
-                            token_start_index < len(offsets)
-                            and offsets[token_start_index][0] <= start_char
-                        ):
+                        while token_start_index < len(offsets) and offsets[token_start_index][0] <= start_char:
                             token_start_index += 1
                         tokenized_examples["start_positions"].append(token_start_index - 1)
                         while offsets[token_end_index][1] >= end_char:
@@ -255,9 +245,7 @@ def run_mrc(
     # Data collator
     # flag가 True이면 이미 max length로 padding된 상태입니다.
     # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
-    data_collator = DataCollatorWithPadding(
-        tokenizer, pad_to_multiple_of=8 if training_args.fp16 else None
-    )
+    data_collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8 if training_args.fp16 else None)
 
     # Post-processing:
     def post_processing_function(examples, features, predictions, training_args):
@@ -269,27 +257,20 @@ def run_mrc(
             n_best_size=data_args.top_k_retrieval,
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
-            is_eval = training_args.do_eval
+            is_eval=training_args.do_eval,
         )
         if training_args.do_eval:
             predictions, label_pos = result
         else:
             predictions = result
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
-        formatted_predictions = [
-            {"id": k, "prediction_text": v} for k, v in predictions.items()
-        ]
+        formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
         if training_args.do_predict:
             return formatted_predictions
 
         elif training_args.do_eval:
-            references = [
-                {"id": ex["id"], "answers": ex[answer_column_name]}
-                for ex in datasets["validation"]
-            ]
-            return EvalPrediction(
-                predictions=formatted_predictions, label_ids=references
-            ), label_pos
+            references = [{"id": ex["id"], "answers": ex[answer_column_name]} for ex in datasets["validation"]]
+            return EvalPrediction(predictions=formatted_predictions, label_ids=references), label_pos
 
     metric = load_metric("squad")
 
@@ -308,8 +289,7 @@ def run_mrc(
         post_process_function=post_processing_function,
         compute_metrics=compute_metrics,
     )
-    
-    
+
     # Training
     if training_args.do_train:
         if last_checkpoint is not None:
@@ -337,28 +317,22 @@ def run_mrc(
                 writer.write(f"{key} = {value}\n")
 
         # State 저장
-        trainer.state.save_to_json(
-            os.path.join(training_args.output_dir, "trainer_state.json")
-        )
+        trainer.state.save_to_json(os.path.join(training_args.output_dir, "trainer_state.json"))
 
     #  prediction
     if training_args.do_predict:
         logger.info("*** Predict ***")
-        predictions = trainer.predict(
-            test_dataset=eval_dataset, test_examples=datasets["validation"]
-        )
+        predictions = trainer.predict(test_dataset=eval_dataset, test_examples=datasets["validation"])
 
         # predictions.json 은 postprocess_qa_predictions() 호출시 이미 저장됩니다.
-        print(
-            "No metric can be presented because there is no correct answer given. Job done!"
-        )
+        print("No metric can be presented because there is no correct answer given. Job done!")
 
     # Evaluation
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
         metrics = trainer.evaluate()
-        
+
         metrics["eval_samples"] = len(eval_dataset)
-        
+
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)

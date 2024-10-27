@@ -16,7 +16,13 @@
 Question-Answering task와 관련된 'Trainer'의 subclass 코드 입니다.
 """
 
-from transformers import Trainer, is_datasets_available, is_torch_tpu_available, BertPreTrainedModel, AutoModelForQuestionAnswering
+from transformers import (
+    AutoModelForQuestionAnswering,
+    BertPreTrainedModel,
+    Trainer,
+    is_datasets_available,
+    is_torch_tpu_available,
+)
 from transformers.trainer_utils import PredictionOutput
 
 if is_datasets_available():
@@ -26,13 +32,14 @@ if is_torch_tpu_available():
     import torch_xla.core.xla_model as xm
     import torch_xla.debug.metrics as met
 
+
 # Huggingface의 Trainer를 상속받아 QuestionAnswering을 위한 Trainer를 생성합니다.
 class QuestionAnsweringTrainer(Trainer):
     def __init__(self, *args, eval_examples=None, post_process_function=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_examples = eval_examples
         self.post_process_function = post_process_function
-        
+
     def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
         eval_dataset = self.eval_dataset if eval_dataset is None else eval_dataset
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
@@ -65,18 +72,19 @@ class QuestionAnsweringTrainer(Trainer):
             )
             metrics = self.compute_metrics(eval_preds)
             # if fp 16 is used, loss is a scalar. We need to put it to a tensor
-            from torch.nn import CrossEntropyLoss
             import torch
-            loss_f  = CrossEntropyLoss()
-            s1,e1 = output.predictions
-            s2,e2 = label_pos
+            from torch.nn import CrossEntropyLoss
+
+            loss_f = CrossEntropyLoss()
+            s1, e1 = output.predictions
+            s2, e2 = label_pos
             start_l = loss_f(torch.tensor(s1), torch.tensor(s2))
 
-            end_l  = loss_f(torch.tensor(e1), torch.tensor(e2))
-            total = (start_l + end_l)/2
-            metrics['eval_loss'] = total.item()
-            metrics['eval_f1'] = metrics['f1']
-            metrics['eval_exact_match'] = metrics['exact_match']
+            end_l = loss_f(torch.tensor(e1), torch.tensor(e2))
+            total = (start_l + end_l) / 2
+            metrics["eval_loss"] = total.item()
+            metrics["eval_f1"] = metrics["f1"]
+            metrics["eval_exact_match"] = metrics["exact_match"]
             self.log(metrics)
         else:
             metrics = {}
@@ -85,9 +93,7 @@ class QuestionAnsweringTrainer(Trainer):
             # tpu-comment: PyTorch/XLA에 대한 Logging debug metrics (compile, execute times, ops, etc.)
             xm.master_print(met.metrics_report())
 
-        self.control = self.callback_handler.on_evaluate(
-            self.args, self.state, self.control, metrics
-        )
+        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics)
         return metrics
 
     def predict(self, test_dataset, test_examples, ignore_keys=None):
@@ -117,8 +123,6 @@ class QuestionAnsweringTrainer(Trainer):
                 type=test_dataset.format["type"],
                 columns=list(test_dataset.features.keys()),
             )
-        
-        predictions = self.post_process_function(
-            test_examples, test_dataset, output.predictions, self.args
-        )
+
+        predictions = self.post_process_function(test_examples, test_dataset, output.predictions, self.args)
         return predictions

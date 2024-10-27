@@ -2,11 +2,11 @@ import json
 import os
 import pickle
 
-from rank_bm25 import BM25Okapi
-from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import torch
-from datasets import load_from_disk, load_dataset, concatenate_datasets
+from datasets import concatenate_datasets, load_dataset, load_from_disk
+from rank_bm25 import BM25Okapi
+from sklearn.feature_extraction.text import TfidfVectorizer
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm.auto import tqdm
 from transformers import AutoModel
@@ -33,12 +33,7 @@ def build_dense_embedding(p_encoder, q_encoder, contexts, tokenizer):
     q_encoder_path = os.path.join("/data/ephemeral/data/", "q_encoder.bin")
 
     for passage in tqdm(contexts, desc="Building dense embeddings"):
-        passage_inputs = tokenizer(
-            passage,
-            return_tensors="pt",
-            truncation=True,
-            padding="max_length"
-        ).to("cuda")
+        passage_inputs = tokenizer(passage, return_tensors="pt", truncation=True, padding="max_length").to("cuda")
 
         with torch.no_grad():
             p_emb = p_encoder(**passage_inputs)  # CLS
@@ -55,13 +50,13 @@ def prepare_in_batch_negative(config, contexts, tokenizer, model_args, data_args
     Prepare in-batch negative samples for training.
     """
 
-    dataset1 = load_from_disk('/data/ephemeral/data/train_dataset')["train"]
-    dataset2 = load_from_disk('/data/ephemeral/data/train_dataset')["validation"]
+    dataset1 = load_from_disk("/data/ephemeral/data/train_dataset")["train"]
+    dataset2 = load_from_disk("/data/ephemeral/data/train_dataset")["validation"]
     dataset_combined = concatenate_datasets([dataset1, dataset2])
 
     dataset_korquad = load_dataset("KorQuAD/squad_kor_v1")["validation"]
-    dataset1_filtered = dataset_combined.select_columns(['question', 'context'])
-    dataset2_filtered = dataset_korquad.select_columns(['question', 'context'])
+    dataset1_filtered = dataset_combined.select_columns(["question", "context"])
+    dataset2_filtered = dataset_korquad.select_columns(["question", "context"])
 
     combined_dataset = concatenate_datasets([dataset1_filtered, dataset2_filtered])
 
@@ -74,27 +69,20 @@ def prepare_in_batch_negative(config, contexts, tokenizer, model_args, data_args
         bert = True
 
     for i, data in enumerate(combined_dataset):
-        q_inputs = tokenizer(
-            data["question"],
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt"
-        )
+        q_inputs = tokenizer(data["question"], truncation=True, padding="max_length", return_tensors="pt")
         q_input_ids.append(q_inputs["input_ids"].tolist())
         q_attention_mask.append(q_inputs["attention_mask"].tolist())
 
-        neg_contexts = sample_negatives(data["question"],
-            data_args.num_neg, 
-            data['context'], 
+        neg_contexts = sample_negatives(
+            data["question"],
+            data_args.num_neg,
+            data["context"],
             contexts,
             bm25,
         )
 
         p_inputs = tokenizer(
-            [data['context']] + neg_contexts,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt"
+            [data["context"]] + neg_contexts, truncation=True, padding="max_length", return_tensors="pt"
         )
 
         p_input_ids.append(p_inputs["input_ids"].tolist())
@@ -135,6 +123,7 @@ def sample_negatives(question, num_neg, context, contexts, bm25):
             break
     return neg_contexts
 
+
 def create_tensor_dataset(
     bert,
     num_neg,
@@ -166,5 +155,3 @@ def create_tensor_dataset(
             torch.tensor(p_input_ids).view(-1, num_neg + 1, size),
             torch.tensor(p_attention_mask).view(-1, num_neg + 1, size),
         )
-
-    
