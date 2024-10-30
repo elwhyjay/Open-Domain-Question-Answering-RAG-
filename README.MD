@@ -6,8 +6,8 @@
 
 | **개요** | **설명** |
 | --- | --- |
-| **주제** |  주어진 질문에 대해 정해진 지문이 없이 사전에 구축되어 있는 Knowledge resource에서 질문에 대한 답변을 찾는 과정 |
-| **데이터셋** | [train_dataset] train: 3,952, validation: 240 <br> [test_dataset] validation: 240(public), 360(private) <br> [wikipedia_documents] 60,613 |
+| **주제** |  주어진 질문에 대해 정해진 지문이 없이 사전에 구축되어 있는 Knowledge resource에서 <br> 질문에 대한 답변을 찾는 과정 |
+| **데이터셋** | **train_dataset |** train: 3,952, validation: 240 <br> **test_dataset |** validation: 240(public), 360(private) <br> **wikipedia_documents |** 60,613 |
 | **평가** | • **두 가지 평가지표**를 사용(EM 기준으로 반영되고, F1은 참고용으로만 활용) <br> • **Exact Match**(EM): 모델의 예측과, 실제 답이 정확하게 일치할 때만 점수가 주어진다. <br> • **F1 Score**: EM과 다르게 겹치는 단어도 있는 것을 고려해 부분 점수를 제공한다. |
 | **개발 환경** | **`GPU`**: Tesla V100 Sever 4대, **`IDE`**: Vscode, Jupyter Notebook |
 
@@ -58,34 +58,23 @@
 ### 프로젝트 구조
 
 <p align='center'>
-  <img src='img/image-1.png' width='450'>
+  <img src='img/image-1.png' width='350'>
 </p
 
 ### 모델 분석 및 성능 개선
 
 | **분류** |  | **내용** |
 | --- | --- | --- |
-| **Retrieval** | Sparse | 텍스트의 단어 빈도를 기반으로 문서와 쿼리 간의 유사도를 계산한다. 주로 TF-IDF와 BM25와 같은 알고리즘이 사용되며, 높은 정밀도를 가지지만, 문장 간 의미적 유사도를 잘 반영하지 못하는 한계가 있다.
-
-사용한 모델: TF-IDF, BM25, TF-IDF + BM25, Elastic Search |
-|  | Dense | 딥러닝 기반 임베딩 모델(Bert)을 활용하여 문서와 쿼리를 밀집 벡터 공간에 매핑한 후, 이 벡터들 간의 유사도를 계산하여 가장 관련성 높은 문서를 찾는다.
-
-사용한 모델: klue/bert-base, klue/roberta(base, large)
-
-모델 구조: Cross-Attention Encoder, Dual-Encoder, Colbert |
+| **Retrieval** | Sparse | 텍스트의 단어 빈도를 기반으로 문서와 쿼리 간의 유사도를 계산한다. 주로 TF-IDF와 BM25와 같은 알고리즘이 사용되며, 높은 정밀도를 가지지만, 문장 간 의미적 유사도를 잘 반영하지 못하는 한계가 있다. <br><br> 사용한 모델: TF-IDF, BM25, TF-IDF + BM25, Elastic Search |
+|  | Dense | 딥러닝 기반 임베딩 모델(Bert)을 활용하여 문서와 쿼리를 밀집 벡터 공간에 매핑한 후, 이 벡터들 간의 유사도를 계산하여 가장 관련성 높은 문서를 찾는다. <br><br> 사용한 모델: klue/bert-base, klue/roberta(base, large) <br><br> 모델 구조: Cross-Attention Encoder, Dual-Encoder, Colbert |
 | **Reader** |  | 사용한 모델: klue/bert-base, monologg/koelectra-base-v3-discriminator, klue/roberta-large, DHBaek/xlm-roberta-large-korquad-mask, hanmaroo/xlm_roberta_large_korquad_v1, team-lucid/deberta-v3-xlarge-korean |
 
 ### 개선 아이디어
 
 | **분류** |  | **내용** |
 | --- | --- | --- |
-| **Retrieval** | Sparse | TF-IDF + BM25
-Re-Ranking |
-|  | Dense | hard negative sampling
-gradient accumulation
-gradient cache
-mixed precision
-Colbert |
+| **Retrieval** | Sparse | TF-IDF + BM25 <br> Re-Ranking |
+|  | Dense | hard negative sampling <br> gradient accumulation <br> gradient cache <br> mixed precision <br> Colbert |
 | **Reader** |  | Curriculum Learning |
 
 # 💥 실험 및 결과
