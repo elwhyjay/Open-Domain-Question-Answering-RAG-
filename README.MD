@@ -18,7 +18,7 @@
   
 |권유진 [<img src="img/github-mark.png" width="20" style="vertical-align:middle;">](https://github.com/0618yujin)|박무재 [<img src="img/github-mark.png" width="20" style="vertical-align:middle;">](https://github.com/Mujae)|박정미 [<img src="img/github-mark.png" width="20" style="vertical-align:middle;">](https://github.com/imJeongmi)|이용준 [<img src="img/github-mark.png" width="20" style="vertical-align:middle;">](https://github.com/elwhyjay)|정원식 [<img src="img/github-mark.png" width="20" style="vertical-align:middle;">](https://github.com/wonsjeong)|
 |:-:|:-:|:-:|:-:|:-:|
-|<img src='img/profile-1.jpeg' height=125 width=125></img>|<img src='img/profile-2.jpeg' height=125 width=125></img>|<img src='img/profile-3.jpeg' height=125 width=125></img>|<img src='img/profile-4.jpeg' height=125 width=125></img>|<img src='img/profile-5.jpeg' height=125 width=125></img>|
+|<img src='img/profile-1.jpeg' height="125" width="125"></img>|<img src='img/profile-2.jpeg' height="125" width="125"></img>|<img src='img/profile-3.jpeg' height="125" width="125"></img>|<img src='img/profile-4.jpeg' height="125" width="125"></img>|<img src='img/profile-5.jpeg' height="125" width="125"></img>|
 |Retriever 모델(BM25, TF-IDF+BM25) 구현|Retriever 모델(DPR) 구현 및 모듈화, negative sampling 구현, 앙상블|EDA, 데이터 전처리, KorQuAD 데이터 증강|PM, base-code 모듈화 및 환경세팅, Colbert 구현, elastic-search 구현, 실험 및 앙상블|Reader 모델 리서치, 모델 실험, Hyperparameter tuning|
 
 </div> <br>
@@ -57,24 +57,24 @@
 ### 프로젝트 구조
 
 <p align='center'>
-  <img src='img/image-1.png' width='350'>
+  <img src='img/image-1.png' width='300'>
 </p
 
 ### 모델 분석 및 성능 개선
 
 | **분류** |  | **내용** |
 | --- | --- | --- |
-| **Retrieval** | Sparse | 텍스트의 단어 빈도를 기반으로 문서와 쿼리 간의 유사도를 계산한다. 주로 TF-IDF와 BM25와 같은 알고리즘이 사용되며, 높은 정밀도를 가지지만, 문장 간 의미적 유사도를 잘 반영하지 못하는 한계가 있다. <br><br> 사용한 모델: TF-IDF, BM25, TF-IDF + BM25, Elastic Search |
-|  | Dense | 딥러닝 기반 임베딩 모델(Bert)을 활용하여 문서와 쿼리를 밀집 벡터 공간에 매핑한 후, 이 벡터들 간의 유사도를 계산하여 가장 관련성 높은 문서를 찾는다. <br><br> 사용한 모델: klue/bert-base, klue/roberta(base, large) <br><br> 모델 구조: Cross-Attention Encoder, Dual-Encoder, Colbert |
+| **Retrieval** | **Sparse** | 텍스트의 단어 빈도를 기반으로 문서와 쿼리 간의 유사도를 계산한다. 주로 TF-IDF와 BM25와 같은 알고리즘이 사용되며, 높은 정밀도를 가지지만, 문장 간 의미적 유사도를 잘 반영하지 못하는 한계가 있다. <br><br> 사용한 모델: TF-IDF, BM25, TF-IDF + BM25, Elastic Search |
+|  | **Dense** | 딥러닝 기반 임베딩 모델(Bert)을 활용하여 문서와 쿼리를 밀집 벡터 공간에 매핑한 후, 이 벡터들 간의 유사도를 계산하여 가장 관련성 높은 문서를 찾는다. <br><br> 사용한 모델: klue/bert-base, klue/roberta(base, large) <br><br> 모델 구조: Cross-Attention Encoder, Dual-Encoder, Colbert |
 | **Reader** |  | 사용한 모델: klue/bert-base, monologg/koelectra-base-v3-discriminator, klue/roberta-large, DHBaek/xlm-roberta-large-korquad-mask, hanmaroo/xlm_roberta_large_korquad_v1, team-lucid/deberta-v3-xlarge-korean |
 
 ### 개선 아이디어
 
 | **분류** |  | **내용** |
 | --- | --- | --- |
-| **Retrieval** | Sparse | TF-IDF + BM25 <br> Re-Ranking |
-|  | Dense | hard negative sampling <br> gradient accumulation <br> gradient cache <br> mixed precision <br> Colbert |
-| **Reader** |  | Curriculum Learning |
+| **Retrieval** | **Sparse** | **TF-IDF + BM25**: TF-IDF로 전체적인 단어 빈도 기반의 유사도를 구하고, BM25의 가중치를 추가하여 문서의 길이와 빈도를 보정 <br> **Re-Ranking**: Sparse 를 이용해 후보 Passage를 정하고 Dense Retrieval로 다시 ranking하는 방법을 적용 |
+|  | **Dense** | **Hard negative sampling**: BM25를 통해 질문과 지문들을 scoring하여 top-n개의 지문을 negative로 활용 <br> **Gradient accumulation**: 여러 미니 배치의 그라디언트를 누적해 마치 큰 Batch size로 학습하는 효과 <br> **Gradient cache**: in-batch 효과를 살릴 수 있는 방법 <br> **Mixed precision**: 모델 파라미터의 일부를 16-bit로 처리하여 메모리 사용량을 줄이고, 학습 속도를 높이는 방식 <br> **Colbert**: late interaction이란 아이디어를 이용해 bi-encoder와 cross-encoder 두 가지 설계의 장점을 취할 수 있음 |
+| **Reader** |  | **Curriculum Learning**: 데이터셋의 순서를 조정하여 모델이 학습하기 어려운것을 뒤로 배치하여 모델이 점차적으로 학습하여 성능을 개선시키기 위한 방법론 |
 
 # 💥 실험 및 결과
 
