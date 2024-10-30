@@ -7,12 +7,8 @@
 | **개요** | **설명** |
 | --- | --- |
 | **주제** |  주어진 질문에 대해 정해진 지문이 없이 사전에 구축되어 있는 Knowledge resource에서 질문에 대한 답변을 찾는 과정 |
-| **데이터셋** | [train_dataset] train: 3,952, validation: 240
-[test_dataset] validation: 240(public), 360(private) 
-[wikipedia_documents] 60,613 |
-| **평가** | • **두 가지 평가지표**를 사용(EM 기준으로 반영되고, F1은 참고용으로만 활용)
-• **Exact Match**(EM): 모델의 예측과, 실제 답이 정확하게 일치할 때만 점수가 주어진다.
-• **F1 Score**: EM과 다르게 겹치는 단어도 있는 것을 고려해 부분 점수를 제공한다. |
+| **데이터셋** | [train_dataset] train: 3,952, validation: 240 <br> [test_dataset] validation: 240(public), 360(private) <br> [wikipedia_documents] 60,613 |
+| **평가** | • **두 가지 평가지표**를 사용(EM 기준으로 반영되고, F1은 참고용으로만 활용) <br> • **Exact Match**(EM): 모델의 예측과, 실제 답이 정확하게 일치할 때만 점수가 주어진다. <br> • **F1 Score**: EM과 다르게 겹치는 단어도 있는 것을 고려해 부분 점수를 제공한다. |
 | **개발 환경** | **`GPU`**: Tesla V100 Sever 4대, **`IDE`**: Vscode, Jupyter Notebook |
 
 <br>
@@ -176,11 +172,11 @@ Colbert |
 - 리더보드 [중간 순위]
 
 <p align='center'>
-  <img src='img/result-1.jpeg' width='800'>
+  <img src='img/result-1.png' width='800'>
 </p>
     
 - 리더보드 [최종 순위]
 
 <p align='center'>
-  <img src='img/result-2.jpeg' width='800'>
+  <img src='img/result-2.png' width='800'>
 </p>
