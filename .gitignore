@@ -2,7 +2,9 @@
 *bin
 *.pth
 *.ipynb
-
+!test.ipynb
+!train.ipynb
+!wiki.ipynb
 __pycache__
 
 
