@@ -3,6 +3,8 @@
 <br>
 
 # 🔎 프로젝트 소개
+
+|ODQA [<img src="img/odqa.png" width="800" style="vertical-align:middle;">]|
 | **개요** | **설명** |
 | --- | --- |
 | **주제** |  주어진 질문에 대해 정해진 지문이 없이 사전에 구축되어 있는 Knowledge resource에서 <br> 질문에 대한 답변을 찾는 과정 |
