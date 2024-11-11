@@ -6,7 +6,7 @@
 
 <p align='center'>
   <img src="img/odqa.png" width="800" style="vertical-align:middle;">  
-<\p>
+</p>
 
 | **개요** | **설명** |
 | --- | --- |
